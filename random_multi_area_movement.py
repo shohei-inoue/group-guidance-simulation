@@ -12,7 +12,7 @@ MIN_MOVEMENT = 1.0                          # 最小移動量
 MAX_BOIDS_MOVEMENT = 3.0                    # boids判定時の最大移動量
 MIN_BOIDS_MOVEMENT = 1.0                    # boids判定時の最小移動量
 OUTER_BOUNDARY = 10.0                       # マーカ-の外側境界
-INNER_BOUNDARY = 5.0                        # マーカーの内側境界
+INNER_BOUNDARY = 0.0                        # マーカーの内側境界
 MEAN = 3.0                                  # マーカーの分布平均
 VARIANCE = 5.0                              # マーカーの分布標準偏差
 MAP_HEIGHT = 100                             # マップの縦サイズ
@@ -28,9 +28,9 @@ SAVE_DIRECTORY = 'csv/'                     # csvファイルの格納先フォ�
 # ----------------------------------- class ----------------------------------------------------------
 # ランダムウォーク
 class Random_walk:
-    def __init__(self):
-        self.x = random.uniform(-25, -20)
-        self.y = random.uniform(-5, 10)
+    def __init__(self, x, y):
+        self.x = random.uniform(x - OUTER_BOUNDARY, x + OUTER_BOUNDARY)
+        self.y = random.uniform(y - OUTER_BOUNDARY, y + OUTER_BOUNDARY)
         self.point = np.array([self.x, self.y])
         self.amount_of_movement = 0.0
         self.direction_angle = 0.0
@@ -52,8 +52,8 @@ class Random_walk:
 
 # Red
 class Red(Random_walk):
-    def __init__(self, red_id, marker, **rest):
-        super().__init__(**rest)
+    def __init__(self, x, y, red_id, marker, **rest):
+        super().__init__(x, y, **rest)
         self.red_id = red_id
         self.distance = np.linalg.norm(self.point - marker.point)
         self.azimuth = self.azimuth_adjustment(marker)
@@ -394,7 +394,7 @@ def main():
         
         for j in range(red_num):
             red_id = 'red' + str(i + 1) + '-' + str(j + 1)
-            red = Red(red_id, main_marker)
+            red = Red(main_marker.x, main_marker.y, red_id, main_marker)
             red_list[i].append(red)
             red_df = pd.DataFrame()
             red_df = pd.DataFrame(red_list[i][j].get_arguments())
@@ -405,7 +405,8 @@ def main():
         map_coverage_ratio = map_coverage_calculation(grid_map)
         print('=' * 30)
         print(red_list[-1][-1].step, " step : map_coverage_ratio :", map_coverage_ratio)
-        if map_coverage_ratio >= ALL_AREA_COVERAGE_THRESHOLD or all(len(sub_list) >= 20 for sub_list in marker_list):
+        if map_coverage_ratio >= ALL_AREA_COVERAGE_THRESHOLD or red_list[-1][-1].step == 3000:
+        # if map_coverage_ratio >= ALL_AREA_COVERAGE_THRESHOLD or all(len(sub_list) >= 20 for sub_list in marker_list): マーカの移動回数で制限
             print('Exploration completed.')
             break
         
@@ -426,7 +427,7 @@ def main():
             if main_marker_list[i].coverage_ratio >= AREA_COVERAGE_THRESHOLD or marker_change_key[i] >= 3:
                 next_theta = random.uniform(0.0, 2.0 * math.pi)
                 next_x = OUTER_BOUNDARY * math.cos(next_theta) + main_marker_list[i].x
-                next_y = OUTER_BOUNDARY * math.sin(next_theta) + main_marker.y
+                next_y = OUTER_BOUNDARY * math.sin(next_theta) + main_marker_list[i].y
             
                 marker_list[i].append(main_marker_list[i])
                 main_marker_list[i] = Virtual_marker('marker' + str(i + 1) + '-' + str(len(marker_list[i]) + 1), next_x, next_y, main_marker_list[i])
