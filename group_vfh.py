@@ -30,6 +30,8 @@ SAVE_DIRECTORY = 'csv/'                     # csvファイルの格納先フォ�
 VFH_DRIVABILITY_BIAS = 0.5
 VFH_EXPLORATION_BIAS = 0.5
 VFH_EXPLORATION_STD = 120
+VFH_MIN_VALUE = 0.01
+VFH_VONMISES_KAPPA = 2
 # ----------------------------------- class ----------------------------------------------------------
 # ランダムウォーク
 class Random_walk:
@@ -274,7 +276,6 @@ class Real_marker:
     
     def vfh_using_probability(self, bins = 16):
         loc = self.calculate_mu_azimuth()
-        kappa = 1
         
         histogram = []
         for i in range(bins):
@@ -300,13 +301,22 @@ class Real_marker:
         total_histogram = np.sum(histogram)
         normalized_histogram = np.array(histogram) / total_histogram
         
-        # 最小値
-        min_value = 0.1
-        scaled_histogram = min_value + normalized_histogram * (1 - min_value)
+        scaled_histogram = VFH_MIN_VALUE + normalized_histogram * (1 - VFH_MIN_VALUE)
         scaled_histogram = scaled_histogram / np.sum(scaled_histogram)
         
         if loc == None:
             scaled_histogram = scaled_histogram.tolist()
+            
+            # 一度行った方向を省く
+            stack_density = 0
+            for i in range(len(self.already_direction_index)):
+                stack_density += scaled_histogram[int(self.already_direction_index[i])]
+                scaled_histogram[int(self.already_direction_index[i])] = 0
+            
+            stack_density /= bins - len(self.already_direction_index)
+            
+            scaled_histogram = [element + stack_density if element != 0 else element for element in scaled_histogram]
+            
             indexes = np.arange(0, 16)
             select_index = np.random.choice(indexes, p=scaled_histogram)
         else:
@@ -314,84 +324,95 @@ class Real_marker:
             for i in range(bins):
                 probability_of_exploration_rate.append(0)
             
-            pdf = norm(loc = loc, scale = VFH_EXPLORATION_STD)
-            
             for i in range(bins):
-                bin_range_start = vonmises.cdf(loc = np.deg2rad(loc), kappa = kappa, x = np.deg2rad(i * split_arg))
-                bin_range_end = vonmises.cdf(loc = np.deg2rad(loc), kappa = kappa, x = np.deg2rad((i + 1) * split_arg))
+                bin_range_start = vonmises.cdf(loc = np.deg2rad(loc), kappa = VFH_VONMISES_KAPPA, x = np.deg2rad(i * split_arg))
+                bin_range_end = vonmises.cdf(loc = np.deg2rad(loc), kappa = VFH_VONMISES_KAPPA, x = np.deg2rad((i + 1) * split_arg))
                 probability_of_exploration_rate[i] = abs(bin_range_end - bin_range_start)
         
             probability_of_exploration_rate = np.array(probability_of_exploration_rate)
             probability_density = VFH_DRIVABILITY_BIAS * scaled_histogram + VFH_EXPLORATION_BIAS * probability_of_exploration_rate
             
             probability_density = probability_density.tolist()
+            
+            # 一度行った方向を省く
+            stack_density = 0
+            for i in range(len(self.already_direction_index)):
+                stack_density += probability_density[int(self.already_direction_index[i])]
+                probability_density[int(self.already_direction_index[i])] = 0
+            
+            stack_density /= bins - len(self.already_direction_index)
+            
+            probability_density = [element + stack_density if element != 0 else element for element in probability_density]
+            
             indexes = np.arange(0, 16)
             select_index = np.random.choice(indexes, p=probability_density)
+            self.already_direction_index.append(select_index)
         
         return (split_arg + 0.5) * select_index
     
     
     def vfh(self, bins = 16):
-        phi = self.calculate_parent_azimuth()
+        loc = self.calculate_mu_azimuth()
         
         histogram = []
         for i in range(bins):
             histogram.append(1)
         
         split_arg = np.rad2deg(2.0 * math.pi) / bins
-        
+
+        # ヒストグラムに衝突判定を割り当てる
         for i in range(self.collision_df.shape[0]):
             collision_azimuth_value = self.collision_df['azimuth'].iloc[i]
-                
+            
             for j in range(bins):
                 bin_range_start = j * split_arg
                 bin_range_end = (j + 1) * split_arg
                 
                 if bin_range_start <= collision_azimuth_value < bin_range_end:
                     histogram[j] += 1
-                    break        
+                    break
         
-        if phi == None:
-            best_index = min(histogram)
+        for i in range(bins):
+            histogram[i] = 1 / histogram[i]
+        
+        total_histogram = np.sum(histogram)
+        normalized_histogram = np.array(histogram) / total_histogram
+        
+        scaled_histogram = VFH_MIN_VALUE + normalized_histogram * (1 - VFH_MIN_VALUE)
+        scaled_histogram = scaled_histogram / np.sum(scaled_histogram)
+        
+        if loc == None:
+            scaled_histogram = scaled_histogram.tolist()
+            best_index = scaled_histogram.index(max(scaled_histogram))
         else:
             probability_of_exploration_rate = []
             for i in range(bins):
                 probability_of_exploration_rate.append(0)
             
-            pdf = norm(loc = 0, scale = VFH_EXPLORATION_STD)
             for i in range(bins):
-                bin_range_start = i * split_arg - phi
-                bin_range_end = (i + 1) * split_arg - phi
-                
-                probability_of_exploration_rate[i] = abs(pdf.cdf(bin_range_end) - pdf.cdf(bin_range_start))
+                bin_range_start = vonmises.cdf(loc = np.deg2rad(loc), kappa = VFH_VONMISES_KAPPA, x = np.deg2rad(i * split_arg))
+                bin_range_end = vonmises.cdf(loc = np.deg2rad(loc), kappa = VFH_VONMISES_KAPPA, x = np.deg2rad((i + 1) * split_arg))
+                probability_of_exploration_rate[i] = abs(bin_range_end - bin_range_start)
         
-            # 正規化
+            probability_of_exploration_rate = np.array(probability_of_exploration_rate)
+            probability_density = VFH_DRIVABILITY_BIAS * scaled_histogram + VFH_EXPLORATION_BIAS * probability_of_exploration_rate
             
-            for i in range(bins):
-                histogram[i] = histogram[i] / sum(histogram)
-
-            # 2つのパラメータを1つに
-            histogram_probability_density = []
-            for i in range(bins):
-                histogram_probability_density.append(0)
+            probability_density = probability_density.tolist()
             
-            for i in range(bins):
-                print('histogram : ', histogram[i], ' : probability : ', probability_of_exploration_rate[i])
-                histogram_probability_density[i] = VFH_DRIVABILITY_BIAS * histogram[i] + VFH_EXPLORATION_BIAS * probability_of_exploration_rate[i]
-
+            # 一度行った方向を省く
+            stack_density = 0
             for i in range(len(self.already_direction_index)):
-                histogram_probability_density[int(self.already_direction_index[i])] = float('inf')
+                stack_density += probability_density[int(self.already_direction_index[i])]
+                probability_density[int(self.already_direction_index[i])] = 0
             
-            for i in range(bins):
-                print('histogram_probability_density : ', histogram_probability_density[i])
-            best_index = histogram_probability_density.index(min(histogram_probability_density))
+            stack_density /= bins - len(self.already_direction_index)
+            
+            probability_density = [element + stack_density if element != 0 else element for element in probability_density]
+            best_index = probability_density.index(max(probability_density))
+            
+            self.already_direction_index.append(best_index)
         
-        best_direction = (split_arg + 0.5) * best_index
-
-        self.already_direction_index.append(best_index)
-        
-        return best_direction
-
+        return (split_arg + 0.5) * best_index
 
 # 仮想マーカー
 class Virtual_marker(Real_marker):
@@ -619,6 +640,7 @@ def main():
             # 探査中心の変換
             if main_marker_list[i].coverage_ratio >= AREA_COVERAGE_THRESHOLD:
                 next_theta = main_marker_list[i].vfh_using_probability()
+                #next_theta = main_marker_list[i].vfh()
                 next_x = OUTER_BOUNDARY * math.cos(next_theta) + main_marker_list[i].x
                 next_y = OUTER_BOUNDARY * math.sin(next_theta) + main_marker_list[i].y
                 
