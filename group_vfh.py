@@ -32,6 +32,7 @@ VFH_EXPLORATION_BIAS = 0.5
 VFH_EXPLORATION_STD = 120
 VFH_MIN_VALUE = 0.01
 VFH_VONMISES_KAPPA = 2
+VFH_BINS = 16
 # ----------------------------------- class ----------------------------------------------------------
 # ランダムウォーク
 class Random_walk:
@@ -257,6 +258,8 @@ class Real_marker:
             vec_d = np.array([x - self.x, y - self.y])
             vec_x = np.array([x - self.x, 0])
             collision_azimuth = np.rad2deg(math.acos(vec_d @ vec_x / (np.linalg.norm(vec_d) * np.linalg.norm(vec_x))))
+        else:
+            vec_d = np.array([x - self.x, y - self.y])
         
         if x - self.x < 0:
             if y - self.y >= 0:
@@ -274,7 +277,9 @@ class Real_marker:
         self.collision_df = pd.concat([self.collision_df, add_collision_data])
     
     
-    def vfh_using_probability(self, bins = 16):
+    # 確率的なVFH(探査向上性と走行可能性の確率分布から無作為に方向決定)
+    def vfh_using_probability(self, bins = VFH_BINS):
+        # 探査向上性が最も高くなる位置の算出
         loc = self.calculate_mu_azimuth()
         
         histogram = []
@@ -295,9 +300,11 @@ class Real_marker:
                     histogram[j] += 1
                     break
         
+        # ヒストグラムを逆数にし, 探査不可能性から探査可能性へのヒストグラムへ変換
         for i in range(bins):
             histogram[i] = 1 / histogram[i]
         
+        # ヒストグラムの正規化
         total_histogram = np.sum(histogram)
         normalized_histogram = np.array(histogram) / total_histogram
         
@@ -351,7 +358,60 @@ class Real_marker:
         return (split_arg + 0.5) * select_index
     
     
-    def vfh(self, bins = 16):
+    # 確率的なVFH()
+    def vfh_using_probability_only_obstacle_density(self, bins=VFH_BINS):
+        histogram = []
+        for i in range(bins):
+            histogram.append(1)
+        
+        split_arg = np.rad2deg(2.0 * math.pi) / bins
+
+        # ヒストグラムに衝突判定を割り当てる
+        for i in range(self.collision_df.shape[0]):
+            collision_azimuth_value = self.collision_df['azimuth'].iloc[i]
+            
+            for j in range(bins):
+                bin_range_start = j * split_arg
+                bin_range_end = (j + 1) * split_arg
+                
+                if bin_range_start <= collision_azimuth_value < bin_range_end:
+                    histogram[j] += 1
+                    break
+        
+        # ヒストグラムを逆数にし, 探査不可能性から探査可能性へのヒストグラムへ変換
+        for i in range(bins):
+            histogram[i] = 1 / histogram[i]
+        
+        # ヒストグラムの正規化
+        total_histogram = np.sum(histogram)
+        normalized_histogram = np.array(histogram) / total_histogram
+        
+        scaled_histogram = VFH_MIN_VALUE + normalized_histogram * (1 - VFH_MIN_VALUE)
+        scaled_histogram = scaled_histogram / np.sum(scaled_histogram)
+        
+        scaled_histogram = scaled_histogram.tolist()
+            
+            # 一度行った方向を省く
+        stack_density = 0
+        for i in range(len(self.already_direction_index)):
+            stack_density += scaled_histogram[int(self.already_direction_index[i])]
+            scaled_histogram[int(self.already_direction_index[i])] = 0
+            
+        stack_density /= bins - len(self.already_direction_index)
+            
+        scaled_histogram = [element + stack_density if element != 0 else element for element in scaled_histogram]
+            
+        indexes = np.arange(0, 16)
+        select_index = np.random.choice(indexes, p=scaled_histogram)
+        self.already_direction_index.append(select_index)
+        
+        return (split_arg + 0.5) * select_index
+    
+    
+    
+    #  VFH(最も走行可能性と探査向上性の上昇する確率の探査中心の決定)
+    def vfh(self, bins = VFH_BINS):
+        # 探査向上性が最も高くなる点の算出
         loc = self.calculate_mu_azimuth()
         
         histogram = []
@@ -372,9 +432,11 @@ class Real_marker:
                     histogram[j] += 1
                     break
         
+        # ヒストグラムを逆数に変換し, 探査不可能性を探査可能性のヒストグラムへ変換
         for i in range(bins):
             histogram[i] = 1 / histogram[i]
         
+        # ヒストグラムの正規化
         total_histogram = np.sum(histogram)
         normalized_histogram = np.array(histogram) / total_histogram
         
@@ -383,6 +445,17 @@ class Real_marker:
         
         if loc == None:
             scaled_histogram = scaled_histogram.tolist()
+            # 一度行った方向を省く
+            stack_density = 0
+            
+            for i in range(len(self.already_direction_index)):
+                stack_density += scaled_histogram[int(self.already_direction_index[i])]
+                scaled_histogram[int(self.already_direction_index[i])] = 0
+            
+            stack_density /= bins - len(self.already_direction_index)
+            
+            scaled_histogram = [element + stack_density if element != 0 else element for element in scaled_histogram]
+            
             best_index = scaled_histogram.index(max(scaled_histogram))
         else:
             probability_of_exploration_rate = []
@@ -401,6 +474,8 @@ class Real_marker:
             
             # 一度行った方向を省く
             stack_density = 0
+            if len(self.already_direction_index) == bins:
+                self.already_direction_index = []
             for i in range(len(self.already_direction_index)):
                 stack_density += probability_density[int(self.already_direction_index[i])]
                 probability_density[int(self.already_direction_index[i])] = 0
@@ -411,6 +486,51 @@ class Real_marker:
             best_index = probability_density.index(max(probability_density))
             
             self.already_direction_index.append(best_index)
+        
+        return (split_arg + 0.5) * best_index
+    
+    def vfh_only_obstacle_density(self, bins=VFH_BINS):
+        histogram = []
+        for i in range(bins):
+            histogram.append(1)
+        
+        split_arg = np.rad2deg(2.0 * math.pi) / bins
+
+        # ヒストグラムに衝突判定を割り当てる
+        for i in range(self.collision_df.shape[0]):
+            collision_azimuth_value = self.collision_df['azimuth'].iloc[i]
+            
+            for j in range(bins):
+                bin_range_start = j * split_arg
+                bin_range_end = (j + 1) * split_arg
+                
+                if bin_range_start <= collision_azimuth_value < bin_range_end:
+                    histogram[j] += 1
+                    break
+        
+        # ヒストグラムを逆数に変換し, 探査不可能性を探査可能性のヒストグラムへ変換
+        for i in range(bins):
+            histogram[i] = 1 / histogram[i]
+        
+        # ヒストグラムの正規化
+        total_histogram = np.sum(histogram)
+        normalized_histogram = np.array(histogram) / total_histogram
+        
+        scaled_histogram = VFH_MIN_VALUE + normalized_histogram * (1 - VFH_MIN_VALUE)
+        scaled_histogram = scaled_histogram / np.sum(scaled_histogram)
+        scaled_histogram = scaled_histogram.tolist()
+        # 一度行った方向を省く
+        stack_density = 0
+        
+        for i in range(len(self.already_direction_index)):
+            stack_density += scaled_histogram[int(self.already_direction_index[i])]
+            scaled_histogram[int(self.already_direction_index[i])] = 0
+        
+        stack_density /= bins - len(self.already_direction_index)
+        
+        scaled_histogram = [element + stack_density if element != 0 else element for element in scaled_histogram]
+        
+        best_index = scaled_histogram.index(max(scaled_histogram))
         
         return (split_arg + 0.5) * best_index
 
@@ -561,12 +681,18 @@ def main():
     obstacle2 = Obstacle_square(-50, -50, 5, 100)
     obstacle3 = Obstacle_square(-50, -50, 100, 5)
     obstacle4 = Obstacle_square(45, -50, 100, 5)
-    #obstacle5 = Obstacle_square(10, 10, 10, 30)
+    obstacle5 = Obstacle_square(10, 10, 10, 30)
+    obstacle6 = Obstacle_square(-35, -35, 10, 10)
+    obstacle7 = Obstacle_square(10, -30, 10, 35)
+    obstacle8 = Obstacle_square(-20, 20, 25, 5)
     obstacle_list.append(obstacle1)
     obstacle_list.append(obstacle2)
     obstacle_list.append(obstacle3)
     obstacle_list.append(obstacle4)
-    #obstacle_list.append(obstacle5)
+    obstacle_list.append(obstacle5)
+    obstacle_list.append(obstacle6)
+    obstacle_list.append(obstacle7)
+    obstacle_list.append(obstacle8)
     
     obstacle_df_list = []
     for i in range(len(obstacle_list)):
@@ -639,16 +765,24 @@ def main():
             
             # 探査中心の変換
             if main_marker_list[i].coverage_ratio >= AREA_COVERAGE_THRESHOLD:
-                next_theta = main_marker_list[i].vfh_using_probability()
-                #next_theta = main_marker_list[i].vfh()
-                next_x = OUTER_BOUNDARY * math.cos(next_theta) + main_marker_list[i].x
-                next_y = OUTER_BOUNDARY * math.sin(next_theta) + main_marker_list[i].y
+                if len(main_marker_list[i].already_direction_index) == VFH_BINS:
+                    marker_list[i].append(main_marker_list[i])
+                    main_marker_list[i] = main_marker_list[i].parent
+                    print('=' * 30)
+                    print(str(i + 1) + 'already_direction_index is max. group marker back changed. (', main_marker_list[i].x, ', ', main_marker_list[i].y, ') : ', len(marker_list[i]))
+                else:
+                    next_theta = main_marker_list[i].vfh_using_probability()
+                    #next_theta = main_marker_list[i].vfh()
+                    #next_theta = main_marker_list[i].vfh_only_obstacle_density()
+                    #next_theta = main_marker_list[i].vfh_using_probability_only_obstacle_density()
+                    next_x = OUTER_BOUNDARY * math.cos(next_theta) + main_marker_list[i].x
+                    next_y = OUTER_BOUNDARY * math.sin(next_theta) + main_marker_list[i].y
                 
-                marker_list[i].append(main_marker_list[i])
-                main_marker_list[i] = Virtual_marker('marker' + str(i + 1) + '-' + str(len(marker_list[i]) + 1), next_x, next_y, main_marker_list[i])
+                    marker_list[i].append(main_marker_list[i])
+                    main_marker_list[i] = Virtual_marker('marker' + str(i + 1) + '-' + str(len(marker_list[i]) + 1), next_x, next_y, main_marker_list[i])
                 
-                print('=' * 30)
-                print(str(i + 1) + 'group marker changed. (', main_marker_list[i].x, ', ', main_marker_list[i].y, ') : ', len(marker_list[i]))
+                    print('=' * 30)
+                    print(str(i + 1) + 'group marker changed. (', main_marker_list[i].x, ', ', main_marker_list[i].y, ') : ', len(marker_list[i]))
                 marker_change_key[i] = 0
             elif marker_change_key[i] >= 3 and main_marker_list[i].coverage_ratio < 80.0:
                 marker_list[i].append(main_marker_list[i])
@@ -667,7 +801,7 @@ def main():
                 #    back_key = 0
                     
                 print('=' * 30)
-                print(str(i + 1) + 'group marker changed. (', main_marker_list[i].x, ', ', main_marker_list[i].y, ') : ', len(marker_list[i]))
+                print(str(i + 1) + 'group marker back changed. (', main_marker_list[i].x, ', ', main_marker_list[i].y, ') : ', len(marker_list[i]))
                 marker_change_key[i] = 0
             
             for j in range(AREA_COVERAGE_STEP):
