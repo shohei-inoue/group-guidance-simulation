@@ -1,0 +1,323 @@
+import numpy as np
+import pandas as pd
+import math
+from scipy.stats import vonmises
+import params
+
+# 実マーカー
+class Real_marker:
+    def __init__(self, marker_id, x, y):
+        self.marker_id = marker_id
+        self.x = x
+        self.y = y
+        self.point = np.array([self.x, self.y])
+        self.coverage_ratio = 0.0
+        self.mean = params.MEAN
+        self.variance = params.VARIANCE
+        self.inner_boundary = params.INNER_BOUNDARY
+        self.outer_boundary = params.OUTER_BOUNDARY
+        self.collision_df = pd.DataFrame(columns=['x', 'y', 'azimuth', 'distance'])
+        self.already_direction_index = []
+        self.parent = None
+    
+    
+    def get_arguments(self):
+        return pd.DataFrame({'marker_id': [self.marker_id], 'x': [self.x], 'y': [self.y], 'point': [self.point], 'coverage_ratio': [self.coverage_ratio], 'mean': [self.mean], 'variance': [self.variance], 'inner_boundary': [self.inner_boundary], 'outer_boundary': [self.outer_boundary], 'parent': [self.parent]})
+    
+    
+    # 親方向から見て最も探査向上性が高くなる角度を求める
+    def calculate_mu_azimuth(self):
+        if self.parent != None:
+            azimuth = 0.0
+            if self.parent.x != self.x:
+                vec_d = np.array(self.point - self.parent.point)
+                vec_x = np.array([self.x - self.parent.x, 0])
+                azimuth = np.rad2deg(math.acos(vec_d @ vec_x / (np.linalg.norm(vec_d) * np.linalg.norm(vec_x))))
+        
+            if self.x - self.parent.x < 0:
+                if self.y - self.parent.y >= 0:
+                    azimuth = np.rad2deg(math.pi) - azimuth
+                else:
+                    azimuth += np.rad2deg(math.pi)
+            else:
+                if self.y - self.parent.y < 0:
+                    azimuth = np.rad2deg(2.0 * math.pi) - azimuth
+        else:
+            azimuth = None
+        
+        return azimuth
+    
+    
+    # 今までの探査中心の座標から平均を求める
+    def calculate_mu_azimuth2(self, marker_list):
+        if len(marker_list) != 0:
+            x_sum = 0
+            y_sum = 0
+            for i in range(len(marker_list)):
+                x_sum += marker_list[i].x
+                y_sum += marker_list[i].y
+        
+            x_mean = x_sum / len(marker_list)
+            y_mean = y_sum / len(marker_list)
+        
+            azimuth = 0.0
+            if x_mean != self.x:
+                vec_d = np.array([self.x - x_mean, self.y - y_mean])
+                vec_x = np.array([self.x - x_mean, 0])
+                azimuth = np.rad2deg(math.acos(vec_d @ vec_x / (np.linalg.norm(vec_d) * np.linalg.norm(vec_x))))
+        
+            if self.x - x_mean < 0:
+                if self.y - y_mean >= 0:
+                    azimuth = np.rad2deg(math.pi) - azimuth
+                else:
+                    azimuth += np.rad2deg(math.pi)
+            else:
+                if self.y - y_mean < 0:
+                    azimuth = np.rad2deg(2.0 * math.pi) - azimuth
+        else:
+            azimuth = None
+        
+        return azimuth
+    
+    
+    def calculate_mu_azimuth3(self, init_marker):
+        if self != init_marker:
+            azimuth = 0.0
+            if init_marker.x != self.x:
+                vec_d = np.array(self.point - init_marker.point)
+                vec_x = np.array([self.x - init_marker.x, 0])
+                azimuth = np.rad2deg(math.acos(vec_d @ vec_x / (np.linalg.norm(vec_d) * np.linalg.norm(vec_x))))
+        
+            if self.x - init_marker.x < 0:
+                if self.y - init_marker.y >= 0:
+                    azimuth = np.rad2deg(math.pi) - azimuth
+                else:
+                    azimuth += np.rad2deg(math.pi)
+            else:
+                if self.y - init_marker.y < 0:
+                    azimuth = np.rad2deg(2.0 * math.pi) - azimuth
+        else:
+            azimuth = None
+        
+        return azimuth
+    
+    def calculate_collision_df(self, x, y):
+        collision_azimuth = 0.0
+        if x != self.x:
+            vec_d = np.array([x - self.x, y - self.y])
+            vec_x = np.array([x - self.x, 0])
+            collision_azimuth = np.rad2deg(math.acos(vec_d @ vec_x / (np.linalg.norm(vec_d) * np.linalg.norm(vec_x))))
+        else:
+            vec_d = np.array([x - self.x, y - self.y])
+        
+        if x - self.x < 0:
+            if y - self.y >= 0:
+                collision_azimuth = np.rad2deg(math.pi) - collision_azimuth
+            else:
+                collision_azimuth += np.rad2deg(math.pi)
+        else:
+            if y - self.y < 0:
+                collision_azimuth = np.rad2deg(2.0 * math.pi) - collision_azimuth
+        
+        collision_distance = np.linalg.norm(vec_d)
+        
+        add_collision_data = pd.DataFrame({'x': [x], 'y': [y], 'azimuth': [collision_azimuth], 'distance': [collision_distance]})
+        
+        self.collision_df = pd.concat([self.collision_df, add_collision_data])
+    
+    
+    # VFHから確率分布を作成し移動先を決定する(探査向上性と走行可能性による確率密度分布)
+    def vfh_using_probability(self, bins = params.VFH_BINS):
+        loc = self.calculate_mu_azimuth()
+        histogram = [1 for i in range(bins)]
+        split_arg = np.rad2deg(2.0 * math.pi) / bins
+
+        for i in range(self.collision_df.shape[0]):
+            collision_azimuth_value = self.collision_df['azimuth'].iloc[i]
+            
+            for j in range(bins):
+                bin_range_start = j * split_arg
+                bin_range_end = (j + 1) * split_arg
+                
+                if bin_range_start <= collision_azimuth_value < bin_range_end:
+                    histogram[j] += 1
+                    break
+        
+        for i in range(bins):
+            histogram[i] = 1 / histogram[i]
+        
+        total_histogram = np.sum(histogram)
+        normalize_histogram = np.array(histogram) / total_histogram
+        
+        scaled_histogram = params.VFH_MIN_VALUE + normalize_histogram * (1 - params.VFH_MIN_VALUE)
+        scaled_histogram = scaled_histogram / np.sum(scaled_histogram)
+        
+        if loc == None:
+            scaled_histogram = scaled_histogram.tolist()
+            select_index = np.random.choice(np.arange(0, 16), p=scaled_histogram)
+        else:
+            probability_of_exploration_rate = [0 for i in range(bins)]
+            for i in range(bins):
+                bin_range_start = vonmises.cdf(loc = np.deg2rad(loc), kappa = params.VFH_VONMISES_KAPPA, x = np.deg2rad(i * split_arg))
+                bin_range_end = vonmises.cdf(loc = np.deg2rad(loc), kappa = params.VFH_VONMISES_KAPPA, x = np.deg2rad((i + 1) * split_arg))
+                probability_of_exploration_rate[i] = abs(bin_range_end - bin_range_start)
+            
+            probability_of_exploration_rate = np.array(probability_of_exploration_rate)
+            probability_density = params.VFH_DRIVABILITY_BIAS * scaled_histogram + params.VFH_EXPLORATION_BIAS * probability_of_exploration_rate
+            
+            probability_density = probability_density.tolist()
+            
+            select_index = np.random.choice(np.arange(0, 16), p=probability_density)
+            self.already_direction_index.append(select_index)
+        
+        return (split_arg + 0.5) * select_index
+    
+    
+    # VFHから確率分布を作成し移動先を決定する(走行可能性による確率密度分布)
+    def vfh_using_probability_only_obstacle_density(self, bins=params.VFH_BINS):
+        histogram = [1 for i in range(bins)]
+        split_arg = np.rad2deg(2.0 * math.pi) / bins
+        
+        for i in range(self.collision_df.shape[0]):
+            collision_azimuth_value = self.collision_df['azimuth'].iloc[i]
+            
+            for j in range(bins):
+                bin_range_start = j * split_arg
+                bin_range_end = (j + 1) * split_arg
+                
+                if bin_range_start <= collision_azimuth_value < bin_range_end:
+                    histogram[j] += 1
+                    break
+        
+        for i in range(bins):
+            histogram[i] = 1 / histogram[i]
+        
+        total_histogram = np.sum(histogram)
+        normalized_histogram = np.array(histogram) / total_histogram
+        
+        scaled_histogram = params.VFH_MIN_VALUE + normalized_histogram * (1 - params.VFH_MIN_VALUE)
+        scaled_histogram = scaled_histogram / np.sum(scaled_histogram)
+        
+        scaled_histogram = scaled_histogram.tolist()
+        select_index = np.random.choice(np.arange(0, 16), p=scaled_histogram)
+        self.already_direction_index.append(select_index)
+        
+        return (split_arg + 0.5) * select_index
+    
+    
+    # VFHにより最も効率の良いとされる方向を決定する(探査向上性と走行可能性)
+    def vfh(self, bins = params.VFH_BINS):
+        loc = self.calculate_mu_azimuth()
+        histogram = [1 for i in range(bins)]
+        split_arg = np.rad2deg(2.0 * math.pi) / bins
+
+        for i in range(self.collision_df.shape[0]):
+            collision_azimuth_value = self.collision_df['azimuth'].iloc[i]
+            
+            for j in range(bins):
+                bin_range_start = j * split_arg
+                bin_range_end = (j + 1) * split_arg
+                
+                if bin_range_start <= collision_azimuth_value < bin_range_end:
+                    histogram[j] += 1
+                    break
+        
+        for i in range(bins):
+            histogram[i] = 1 / histogram[i]
+        
+        total_histogram = np.sum(histogram)
+        normalized_histogram = np.array(histogram) / total_histogram
+        
+        scaled_histogram = params.VFH_MIN_VALUE + normalized_histogram * (1 - params.VFH_MIN_VALUE)
+        scaled_histogram = scaled_histogram / np.sum(scaled_histogram)
+        
+        if loc == None:
+            scaled_histogram = scaled_histogram.tolist()
+            best_index = scaled_histogram.index(max(scaled_histogram))
+        else:
+            probability_of_exploration_rate = []
+            for i in range(bins):
+                probability_of_exploration_rate.append(0)
+            
+            for i in range(bins):
+                bin_range_start = vonmises.cdf(loc = np.deg2rad(loc), kappa = params.VFH_VONMISES_KAPPA, x = np.deg2rad(i * split_arg))
+                bin_range_end = vonmises.cdf(loc = np.deg2rad(loc), kappa = params.VFH_VONMISES_KAPPA, x = np.deg2rad((i + 1) * split_arg))
+                probability_of_exploration_rate[i] = abs(bin_range_end - bin_range_start)
+        
+            probability_of_exploration_rate = np.array(probability_of_exploration_rate)
+            probability_density = params.VFH_DRIVABILITY_BIAS * scaled_histogram + params.VFH_EXPLORATION_BIAS * probability_of_exploration_rate
+            
+            probability_density = probability_density.tolist()
+            best_index = probability_density.index(max(probability_density))
+        
+        return (split_arg + 0.5) * best_index
+    
+    
+    # VFHにより最も効率の良いとされる方向を決定する(走行可能性)
+    def vfh_only_obstacle_density(self, bins = params.VFH_BINS):
+        histogram = [1 for i in range(bins)]
+        split_arg = np.rad2deg(2.0 * math.pi) / bins
+
+        for i in range(self.collision_df.shape[0]):
+            collision_azimuth_value = self.collision_df['azimuth'].iloc[i]
+            
+            for j in range(bins):
+                bin_range_start = j * split_arg
+                bin_range_end = (j + 1) * split_arg
+                
+                if bin_range_start <= collision_azimuth_value < bin_range_end:
+                    histogram[j] += 1
+                    break
+        
+        for i in range(bins):
+            histogram[i] = 1 / histogram[i]
+        
+        total_histogram = np.sum(histogram)
+        normalized_histogram = np.array(histogram) / total_histogram
+        
+        scaled_histogram = params.VFH_MIN_VALUE + normalized_histogram * (1 - params.VFH_MIN_VALUE)
+        scaled_histogram = scaled_histogram / np.sum(scaled_histogram)
+        scaled_histogram = scaled_histogram.tolist()
+        
+        best_index = scaled_histogram.index(max(scaled_histogram))
+        
+        return (split_arg + 0.5) * best_index
+
+
+# 仮想マーカー
+class Virtual_marker(Real_marker):
+    def __init__(self,marker_id, x, y, parent):
+        super().__init__(marker_id, x, y)
+        self.parent = parent
+    
+    
+    def get_arguments(self):
+        arguments = super().get_arguments()
+        return arguments
+    
+    
+    def calculate_parent_azimuth(self):
+        return super().calculate_parent_azimuth()
+    
+    
+    def calculate_collision_df(self, x, y):
+        return super().calculate_collision_df(x, y)
+    
+    
+    def vfh(self, bins=16):
+        return super().vfh(bins)
+    
+    
+    def vfh_using_probability(self, bins=16):
+        return super().vfh_using_probability(bins)
+
+
+# メインマーカー変換閾値
+def marker_change_threshold():
+    area_count = 0
+    for i in range(round(-params.OUTER_BOUNDARY), round(params.OUTER_BOUNDARY + 1)):
+        for j in range(round(-params.OUTER_BOUNDARY), round(params.OUTER_BOUNDARY + 1)):
+            distance = math.sqrt(i ** 2 + j ** 2)
+            if params.INNER_BOUNDARY < distance < params.OUTER_BOUNDARY:
+                area_count += 1
+    return 1.5 / area_count * 100.0
