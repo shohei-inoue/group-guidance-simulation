@@ -1,4 +1,4 @@
-#vfhを用いた群誘導
+# 探査向上性を過去の探査中心の平均にした場合のvfhを用いた群誘導
 import random
 import math
 import numpy as np
@@ -6,6 +6,7 @@ import pandas as pd
 import sys
 import matplotlib.pyplot as plt
 from scipy.stats import vonmises
+
 
 # -------------------------------- const parameter ---------------------------------------------------
 MAX_MOVEMENT = 3.0                          # 最大移動量
@@ -26,8 +27,8 @@ ALL_AREA_COVERAGE_THRESHOLD = 70.0          # マップ全体の網羅率の閾�
 AREA_COVERAGE_STEP = 10
 SAVE_DIRECTORY = 'csv/'                     # csvファイルの格納先フォルダ
 # ------------ VFHに使用するパラメータ -----------------------
-VFH_DRIVABILITY_BIAS = 0.5
-VFH_EXPLORATION_BIAS = 0.5
+VFH_DRIVABILITY_BIAS = 0.4
+VFH_EXPLORATION_BIAS = 0.6
 VFH_EXPLORATION_STD = 120
 VFH_MIN_VALUE = 0.01
 VFH_VONMISES_KAPPA = 2
@@ -312,8 +313,8 @@ class Real_marker:
     
     
     # VFHから確率分布を作成し移動先を決定する(探査向上性と走行可能性による確率密度分布)
-    def vfh_using_probability(self, bins = VFH_BINS):
-        loc = self.calculate_mu_azimuth()
+    def vfh_using_probability(self, marker_list, bins = VFH_BINS):
+        loc = self.calculate_mu_azimuth2(marker_list)
         histogram = [1 for i in range(bins)]
         split_arg = np.rad2deg(2.0 * math.pi) / bins
 
@@ -355,7 +356,7 @@ class Real_marker:
             select_index = np.random.choice(np.arange(0, 16), p=probability_density)
             self.already_direction_index.append(select_index)
         
-        return split_arg * (select_index + 0.5)
+        return (split_arg + 0.5) * select_index
     
     
     # VFHから確率分布を作成し移動先を決定する(走行可能性による確率密度分布)
@@ -391,8 +392,8 @@ class Real_marker:
     
     
     # VFHにより最も効率の良いとされる方向を決定する(探査向上性と走行可能性)
-    def vfh(self, bins = VFH_BINS):
-        loc = self.calculate_mu_azimuth()
+    def vfh(self, marker_list, bins = VFH_BINS):
+        loc = self.calculate_mu_azimuth2(marker_list)
         histogram = [1 for i in range(bins)]
         split_arg = np.rad2deg(2.0 * math.pi) / bins
 
@@ -701,7 +702,7 @@ def main():
         map_coverage_ratio = map_coverage_calculation(main_map)
         print('=' * 30)
         print(red_list[-1][-1].step, "step : map_coverage_ratio :", map_coverage_ratio)
-        if map_coverage_ratio >= ALL_AREA_COVERAGE_THRESHOLD or red_list[-1][-1].step == 5000: # 仮
+        if map_coverage_ratio >= ALL_AREA_COVERAGE_THRESHOLD or len(marker_list[0]) == 100: # 仮
             print('Exploration completed.')
             break
         
@@ -726,7 +727,7 @@ def main():
             # 50以下→戻り行動, 50以上, 80未満-> vfh() or vfh_only_obstacle_density()
             # 探査向上性の方式を前に使用したマーカーの分散等から推定する方式の追加
             if main_marker_list[i].coverage_ratio >= AREA_COVERAGE_THRESHOLD:
-                next_theta = math.radians(main_marker_list[i].vfh_using_probability())
+                next_theta = math.radians(main_marker_list[i].vfh_using_probability(marker_list[i]))
                 next_x = OUTER_BOUNDARY * math.cos(next_theta) + main_marker_list[i].x
                 next_y = OUTER_BOUNDARY * math.sin(next_theta) + main_marker_list[i].y
                 marker_list[i].append(main_marker_list[i])
@@ -753,17 +754,17 @@ def main():
                     print('=' * 30)
                 # 前のアルゴリズムがvfh_using_probability()ではない場合
                 elif marker_algorithm_key[i] == 0:
-                    #next_theta = main_marker_list[i].vfh()
+                    #next_theta = main_marker_list[i].vfh(marker_list[i])
                     next_theta = math.radians(main_marker_list[i].vfh_only_obstacle_density())
                     next_x = OUTER_BOUNDARY * math.cos(next_theta) + main_marker_list[i].x
                     next_y = OUTER_BOUNDARY * math.sin(next_theta) + main_marker_list[i].y
                     marker_list[i].append(main_marker_list[i])
                     main_marker_list[i] = Virtual_marker('marker' + str(i + 1) + '-' + str(len(marker_list[i]) + 1), next_x, next_y, main_marker_list[i])
                     print('=' * 30)
-                    print(str(i + 1) + 'group marker changed by vfh(). (', main_marker_list[i].x, ', ', main_marker_list[i].y, ') : ', len(marker_list[i]))
+                    print(str(i + 1) + 'group marker changed by vfh_using_probability(). (', main_marker_list[i].x, ', ', main_marker_list[i].y, ') : ', len(marker_list[i]))
                     print('=' * 30)
                 marker_change_key[i] = 0
-                marker_algorithm_key[i] = 1
+                marker_algorithm_key[i] = 0
                 area_step[i] = 0
 
                 # グリットマップの変更

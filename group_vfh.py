@@ -1,4 +1,4 @@
-# 群を一つのロボットと見た時のvfhを用いた群誘導
+# vfhを用いた群誘導
 import random
 import math
 import statistics
@@ -19,8 +19,8 @@ OUTER_BOUNDARY = 10.0                       # マーカ-の外側境界
 INNER_BOUNDARY = 0.0                        # マーカーの内側境界
 MEAN = 3.0                                  # マーカーの分布平均
 VARIANCE = 5.0                              # マーカーの分布標準偏差
-MAP_HEIGHT = 100                             # マップの縦サイズ
-MAP_WIDTH = 100                              # マップの横サイズ
+MAP_HEIGHT = 60                             # マップの縦サイズ
+MAP_WIDTH = 200                              # マップの横サイズ
 CENTER_X = math.floor(MAP_WIDTH / 2)
 CENTER_Y = math.floor(MAP_HEIGHT / 2)
 AREA_COVERAGE_THRESHOLD = 80.0              # 領域網羅率のマーカー変換値
@@ -37,8 +37,8 @@ VFH_BINS = 16
 # ランダムウォーク
 class Random_walk:
     def __init__(self, x, y):
-        self.x = random.uniform(x - OUTER_BOUNDARY, x + OUTER_BOUNDARY)
-        self.y = random.uniform(y - OUTER_BOUNDARY, y + OUTER_BOUNDARY)
+        self.x = random.uniform(x - OUTER_BOUNDARY / 2, x + OUTER_BOUNDARY / 2)
+        self.y = random.uniform(y - OUTER_BOUNDARY / 2, y + OUTER_BOUNDARY / 2)
         self.point = np.array([self.x, self.y])
         self.amount_of_movement = 0.0
         self.direction_angle = 0.0
@@ -250,7 +250,7 @@ class Real_marker:
             azimuth = None
         
         return azimuth
-    
+        
     
     def calculate_collision_df(self, x, y):
         collision_azimuth = 0.0
@@ -355,7 +355,7 @@ class Real_marker:
             select_index = np.random.choice(indexes, p=probability_density)
             self.already_direction_index.append(select_index)
         
-        return (split_arg + 0.5) * select_index
+        return split_arg * (select_index + 0.5)
     
     
     # 確率的なVFH()
@@ -405,7 +405,7 @@ class Real_marker:
         select_index = np.random.choice(indexes, p=scaled_histogram)
         self.already_direction_index.append(select_index)
         
-        return (split_arg + 0.5) * select_index
+        return split_arg * (select_index + 0.5)
     
     
     
@@ -487,7 +487,7 @@ class Real_marker:
             
             self.already_direction_index.append(best_index)
         
-        return (split_arg + 0.5) * best_index
+        return split_arg * (best_index + 0.5)
     
     def vfh_only_obstacle_density(self, bins=VFH_BINS):
         histogram = []
@@ -532,7 +532,7 @@ class Real_marker:
         
         best_index = scaled_histogram.index(max(scaled_histogram))
         
-        return (split_arg + 0.5) * best_index
+        return split_arg * (best_index + 0.5)
 
 # 仮想マーカー
 class Virtual_marker(Real_marker):
@@ -677,14 +677,29 @@ def main():
     
     # 障害物の作成
     obstacle_list = []
-    obstacle1 = Obstacle_square(-50, 45, 5, 100)
-    obstacle2 = Obstacle_square(-50, -50, 5, 100)
-    obstacle3 = Obstacle_square(-50, -50, 100, 5)
-    obstacle4 = Obstacle_square(45, -50, 100, 5)
-    obstacle5 = Obstacle_square(10, 10, 10, 30)
-    obstacle6 = Obstacle_square(-35, -35, 10, 10)
-    obstacle7 = Obstacle_square(10, -30, 10, 35)
-    obstacle8 = Obstacle_square(-20, 20, 25, 5)
+    # 100 * 100 領域での障害物
+    #obstacle1 = Obstacle_square(-50, 45, 5, 100)
+    #obstacle2 = Obstacle_square(-50, -50, 5, 100)
+    #obstacle3 = Obstacle_square(-50, -50, 100, 5)
+    #obstacle4 = Obstacle_square(45, -50, 100, 5)
+    #obstacle5 = Obstacle_square(10, 10, 10, 30)
+    #obstacle6 = Obstacle_square(-35, -35, 10, 10)
+    #obstacle7 = Obstacle_square(10, -30, 10, 35)
+    #obstacle8 = Obstacle_square(-20, 20, 25, 5)
+    #obstacle9 = Obstacle_square(0, 0, 10, 10)
+    #obstacle10 = Obstacle_square(-45, -5, 20, 10)
+    
+    obstacle1 = Obstacle_square(-100, 25, 5, 200)
+    obstacle2 = Obstacle_square(-100, -30, 5, 200)
+    obstacle3 = Obstacle_square(-100, -25, 50, 5)
+    obstacle4 = Obstacle_square(95, -25, 50, 5)
+    obstacle5 = Obstacle_square(-95, 10, 15, 40)
+    obstacle6 = Obstacle_square(-95, -25, 18, 50)
+    obstacle7 = Obstacle_square(-10, 15, 10, 20)
+    obstacle8 = Obstacle_square(-5, -25, 25, 40)
+    obstacle9 = Obstacle_square(50, 10, 5, 20)
+    obstacle10 = Obstacle_square(70, 10, 15, 5)
+    
     obstacle_list.append(obstacle1)
     obstacle_list.append(obstacle2)
     obstacle_list.append(obstacle3)
@@ -693,6 +708,8 @@ def main():
     obstacle_list.append(obstacle6)
     obstacle_list.append(obstacle7)
     obstacle_list.append(obstacle8)
+    obstacle_list.append(obstacle9)
+    obstacle_list.append(obstacle10)
     
     obstacle_df_list = []
     for i in range(len(obstacle_list)):
@@ -724,7 +741,7 @@ def main():
         red_num = int(input('Please enter the number of Reds in the ' + str(i + 1) + ' group. : '))
         marker_x = int(input('Please enter the x-coordinate of the ' + str(i + 1) + ' group marker : '))
         marker_y = int(input('Please enter the y-coordinate of the ' + str(i + 1) + ' group marker : '))
-        main_marker = Real_marker('marker' + str(1 + 1) + '-1', marker_x, marker_y)
+        main_marker = Real_marker('marker' + str(i + 1) + '-1', marker_x, marker_y)
         red_list.append([])
         red_df_list.append([])
         marker_list.append([])
@@ -745,6 +762,7 @@ def main():
         map_coverage_ratio = map_coverage_calculation(grid_map)
         print('=' * 30)
         print(red_list[-1][-1].step, "step : map_coverage_ratio :", map_coverage_ratio)
+        #if map_coverage_ratio >= ALL_AREA_COVERAGE_THRESHOLD:
         if map_coverage_ratio >= ALL_AREA_COVERAGE_THRESHOLD or red_list[-1][-1].step == 5000:
             print('Exploration completed.')
             break
@@ -764,14 +782,14 @@ def main():
             main_marker_list[i].coverage_ratio = area_coverage_ratio
             
             # 探査中心の変換
-            if main_marker_list[i].coverage_ratio >= AREA_COVERAGE_THRESHOLD:
+            if main_marker_list[i].coverage_ratio >= AREA_COVERAGE_THRESHOLD or (marker_change_key[i] >= 3 and main_marker_list[i].coverage_ratio < 80.0 and main_marker_list[i].parent == None):
                 if len(main_marker_list[i].already_direction_index) == VFH_BINS:
                     marker_list[i].append(main_marker_list[i])
                     main_marker_list[i] = main_marker_list[i].parent
                     print('=' * 30)
                     print(str(i + 1) + 'already_direction_index is max. group marker back changed. (', main_marker_list[i].x, ', ', main_marker_list[i].y, ') : ', len(marker_list[i]))
                 else:
-                    next_theta = main_marker_list[i].vfh_using_probability()
+                    next_theta = math.radians(main_marker_list[i].vfh_using_probability())
                     #next_theta = main_marker_list[i].vfh()
                     #next_theta = main_marker_list[i].vfh_only_obstacle_density()
                     #next_theta = main_marker_list[i].vfh_using_probability_only_obstacle_density()
@@ -784,7 +802,7 @@ def main():
                     print('=' * 30)
                     print(str(i + 1) + 'group marker changed. (', main_marker_list[i].x, ', ', main_marker_list[i].y, ') : ', len(marker_list[i]))
                 marker_change_key[i] = 0
-            elif marker_change_key[i] >= 3 and main_marker_list[i].coverage_ratio < 80.0:
+            elif marker_change_key[i] >= 3 and main_marker_list[i].coverage_ratio < 80.0 and main_marker_list[i].parent != None:
                 marker_list[i].append(main_marker_list[i])
                 main_marker_list[i] = main_marker_list[i].parent
                 #if back_key == 0:
