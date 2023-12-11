@@ -80,27 +80,27 @@ class Real_marker:
         return azimuth
     
     
-    def calculate_mu_azimuth3(self, init_marker):
-        if self != init_marker:
-            azimuth = 0.0
-            if init_marker.x != self.x:
-                vec_d = np.array(self.point - init_marker.point)
-                vec_x = np.array([self.x - init_marker.x, 0])
-                azimuth = np.rad2deg(math.acos(vec_d @ vec_x / (np.linalg.norm(vec_d) * np.linalg.norm(vec_x))))
+    # 初期位置に対しての角度
+    def calculate_mu_azimuth3(self, init_x, init_y):
+        azimuth = 0.0
+        if init_x != self.x:
+            vec_d = np.array([self.x - init_x, self.y - init_y])
+            vec_x = np.array([self.x - init_x, 0])
+            azimuth = np.rad2deg(math.acos(vec_d @ vec_x / (np.linalg.norm(vec_d) * np.linalg.norm(vec_x))))
         
-            if self.x - init_marker.x < 0:
-                if self.y - init_marker.y >= 0:
-                    azimuth = np.rad2deg(math.pi) - azimuth
-                else:
-                    azimuth += np.rad2deg(math.pi)
+        if self.x - init_x < 0:
+            if self.y - init_y >= 0:
+                azimuth = np.rad2deg(math.pi) - azimuth
             else:
-                if self.y - init_marker.y < 0:
-                    azimuth = np.rad2deg(2.0 * math.pi) - azimuth
+                azimuth += np.rad2deg(math.pi)
         else:
-            azimuth = None
+            if self.y - init_y < 0:
+                azimuth = np.rad2deg(2.0 * math.pi) - azimuth
         
         return azimuth
     
+    
+    # 探査領域ごとの障害物判定をデータフレームに格納する
     def calculate_collision_df(self, x, y):
         collision_azimuth = 0.0
         if x != self.x:
@@ -127,8 +127,9 @@ class Real_marker:
     
     
     # VFHから確率分布を作成し移動先を決定する(探査向上性と走行可能性による確率密度分布)
-    def vfh_using_probability(self, bins = params.VFH_BINS):
+    def vfh_using_probability(self, bins=params.VFH_BINS):
         loc = self.calculate_mu_azimuth()
+        print("loc : ", loc)
         histogram = [1 for i in range(bins)]
         split_arg = np.rad2deg(2.0 * math.pi) / bins
 
@@ -145,6 +146,7 @@ class Real_marker:
         
         for i in range(bins):
             histogram[i] = 1 / histogram[i]
+            print("histogram[", str(i), "] : ", histogram[i])
         
         total_histogram = np.sum(histogram)
         normalize_histogram = np.array(histogram) / total_histogram
@@ -170,7 +172,9 @@ class Real_marker:
             select_index = np.random.choice(np.arange(0, 16), p=probability_density)
             self.already_direction_index.append(select_index)
         
-        return (split_arg + 0.5) * select_index
+        print("select_index : ", select_index, " arg : ", split_arg * (select_index + 0.5))
+        
+        return split_arg * (select_index + 0.5)
     
     
     # VFHから確率分布を作成し移動先を決定する(走行可能性による確率密度分布)
@@ -202,11 +206,11 @@ class Real_marker:
         select_index = np.random.choice(np.arange(0, 16), p=scaled_histogram)
         self.already_direction_index.append(select_index)
         
-        return (split_arg + 0.5) * select_index
+        return split_arg * (select_index + 0.5)
     
     
     # VFHにより最も効率の良いとされる方向を決定する(探査向上性と走行可能性)
-    def vfh(self, bins = params.VFH_BINS):
+    def vfh(self, bins=params.VFH_BINS):
         loc = self.calculate_mu_azimuth()
         histogram = [1 for i in range(bins)]
         split_arg = np.rad2deg(2.0 * math.pi) / bins
@@ -250,11 +254,11 @@ class Real_marker:
             probability_density = probability_density.tolist()
             best_index = probability_density.index(max(probability_density))
         
-        return (split_arg + 0.5) * best_index
+        return split_arg * (best_index + 0.5)
     
     
     # VFHにより最も効率の良いとされる方向を決定する(走行可能性)
-    def vfh_only_obstacle_density(self, bins = params.VFH_BINS):
+    def vfh_only_obstacle_density(self, bins=params.VFH_BINS):
         histogram = [1 for i in range(bins)]
         split_arg = np.rad2deg(2.0 * math.pi) / bins
 
@@ -271,6 +275,7 @@ class Real_marker:
         
         for i in range(bins):
             histogram[i] = 1 / histogram[i]
+            print("histogram[", str(i), '] : ', histogram[i])
         
         total_histogram = np.sum(histogram)
         normalized_histogram = np.array(histogram) / total_histogram
@@ -280,8 +285,59 @@ class Real_marker:
         scaled_histogram = scaled_histogram.tolist()
         
         best_index = scaled_histogram.index(max(scaled_histogram))
+        print("best_index : ", best_index, " arg : ", split_arg * (best_index + 0.5))
         
-        return (split_arg + 0.5) * best_index
+        return split_arg * (best_index + 0.5)
+
+    
+    # 深さ優先探索を用い, 走行可能性により方向を決定する
+    def vfh_dfs(self, init_x, init_y, bins=params.VFH_BINS):
+        loc = self.calculate_mu_azimuth3(init_x, init_y)
+        histogram = [1 for i in range(bins)]
+        split_arg = np.rad2deg(2.0 * math.pi) / bins
+
+        for i in range(self.collision_df.shape[0]):
+            collision_azimuth_value = self.collision_df['azimuth'].iloc[i]
+            
+            for j in range(bins):
+                bin_range_start = j * split_arg
+                bin_range_end = (j + 1) * split_arg
+                
+                if bin_range_start <= collision_azimuth_value < bin_range_end:
+                    histogram[j] += 1
+                    break
+        
+        for i in range(len(self.already_direction_index)):
+            histogram[int(self.already_direction_index[i])] = float('inf')
+        
+        loc_th_list = []
+        loc_th_list.append((loc + np.rad2deg(math.pi) / 2.0) % 360)
+        loc_th_list.append((loc + np.rad2deg(math.pi) * 1.5) % 360)
+        loc_th1 = min(loc_th_list)
+        loc_th2 = max(loc_th_list)
+        
+        next_point_index = []
+        next_point_histogram = []
+        for i in range(bins):
+            if 90 <= loc < 270:
+                if loc_th1 <= (i + 0.5) * split_arg <= loc_th2:
+                    next_point_index.append(i)
+                    next_point_histogram.append(histogram[i])
+            else:
+                if 0 <= (i + 0.5) * split_arg <= loc_th1 or loc_th2 <= (i + 0.5) * split_arg <= 360:
+                    next_point_index.append(i)
+                    next_point_histogram.append(histogram[i])
+        
+        if next_point_histogram == []:
+            return None
+        else:
+            best_index = next_point_index[next_point_histogram.index(min(next_point_histogram))]
+            self.already_direction_index.append(best_index)
+        
+            if min(next_point_histogram) <= 5:
+                return split_arg * (best_index + 0.5)
+            else:
+                return None
 
 
 # 仮想マーカー
@@ -300,16 +356,36 @@ class Virtual_marker(Real_marker):
         return super().calculate_parent_azimuth()
     
     
+    def calculate_mu_azimuth2(self, marker_list):
+        return super().calculate_mu_azimuth2(marker_list)
+    
+    
+    def calculate_mu_azimuth3(self, init_x, init_y):
+        return super().calculate_mu_azimuth3(init_x, init_y)
+    
+    
     def calculate_collision_df(self, x, y):
         return super().calculate_collision_df(x, y)
     
     
-    def vfh(self, bins=16):
+    def vfh(self, bins=params.VFH_BINS):
         return super().vfh(bins)
     
     
-    def vfh_using_probability(self, bins=16):
+    def vfh_using_probability(self, bins=params.VFH_BINS):
         return super().vfh_using_probability(bins)
+    
+    
+    def vfh_only_obstacle_density(self, bins=params.VFH_BINS):
+        return super().vfh_only_obstacle_density(bins)
+    
+    
+    def vfh_using_probability_only_obstacle_density(self, bins=params.VFH_BINS):
+        return super().vfh_using_probability_only_obstacle_density(bins)
+    
+    
+    def vfh_dfs(self, init_x, init_y, bins=params.VFH_BINS):
+        return super().vfh_dfs(init_x, init_y, bins)
 
 
 # メインマーカー変換閾値
