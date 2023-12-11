@@ -74,7 +74,7 @@ def main():
         print('#' * 30)
         
         # 誘導終了判定
-        if map_coverage_ratio >= params.ALL_AREA_COVERAGE_THRESHOLD or red_list[-1][-1].step == 5000: # 仮置き
+        if red_list[-1][-1].step == 5000:
             print('Exploration completed.')
             break
         
@@ -85,54 +85,25 @@ def main():
             print('=' * 30)
             print(area_step[i], 'step(total ', red_list[i][-1].step, ' step) : area_coverage_ratio : ', area_coverage_ratio)
             print('=' * 30)
-            # 網羅率向上によるストレスカウント
-            if area_coverage_ratio - main_marker_list[i].coverage_ratio <= marker_change_th:
-                marker_change_key[i] += 1
-            else:
-                marker_change_key[i] = 0
             
-            main_marker_list[i].coverage_ratio = area_coverage_ratio
-            
-            # 網羅率が閾値を超えた場合の探査中心の変換
-            if main_marker_list[i].coverage_ratio >= params.AREA_COVERAGE_THRESHOLD:
-                next_theta = math.radians(main_marker_list[i].vfh_using_probability())
-                next_x = params.OUTER_BOUNDARY * math.cos(next_theta) + main_marker_list[i].x
-                next_y = params.OUTER_BOUNDARY * math.sin(next_theta) + main_marker_list[i].y
-                marker_list[i].append(main_marker_list[i])
-                main_marker_list[i] = marker.Virtual_marker('marker' + str(i + 1) + '-' + str(len(marker_list[i]) + 1), next_x, next_y, main_marker_list[i])
-                print('=' * 10, 'marker', str(i + 1), ' change', '=' * 10)
-                print(str(i + 1) + 'group marker changed by vfh_using_probability(). (', main_marker_list[i].x, ', ', main_marker_list[i].y, ') : ', len(marker_list[i]))
-                print('=' * 30)
-                marker_algorithm_key[i] = 1
-                marker_change_key[i] = 0
-                
-                # グリットマップの更新
-                grid_map[i], _, _ = map.grid_map()
-                ax[i].pcolormesh(X_list[i], Y_list[i], grid_map[i], cmap = 'brg', edgecolors = 'black', shading='auto')
-                ax[i].set_title('marker' + str(i + 1) + 'grid_map')
-                plt.pause(0.05)
-            
-            # 網羅率が閾値を超えなかった場合とストレスカウントが閾値を超えた場合の探査中心の変換
-            elif marker_change_key[i] >= 4 or area_step[i] == params.AREA_STEP_THRESHOLD:
-                # 前回の探査中心の変換が確率密度を用いたものだった場合
-                if marker_algorithm_key[i] == 1:
+            # 探査中心の変換
+            if area_step[i] == 200:
+                next_theta = math.radians(main_marker_list[i].vfh_dfs(-90, 0)) # 仮置き
+                # 戻り行動
+                if next_theta == None:
                     marker_list[i].append(main_marker_list[i])
                     main_marker_list[i] = main_marker_list[i].parent
-                    print('=' * 10, 'marker', str(i + 1), ' change', '=' * 10)
+                    print('=' * 10, 'marker', str(i + 1), 'change', '=' * 10)
                     print(str(i + 1) + 'group marker back changed. (', main_marker_list[i].x, ', ', main_marker_list[i].y, ') : ', len(marker_list[i]))
                     print('=' * 30)
-                
-                # 前回の探査中心の変換が確率密度を用いなかった場合
-                elif marker_algorithm_key[i] == 0:
-                    next_theta = math.radians(main_marker_list[i].vfh_only_obstacle_density())
+                else:
                     next_x = params.OUTER_BOUNDARY * math.cos(next_theta) + main_marker_list[i].x
                     next_y = params.OUTER_BOUNDARY * math.sin(next_theta) + main_marker_list[i].y
+                    marker_list[i].append(main_marker_list[i])
                     main_marker_list[i] = marker.Virtual_marker('marker' + str(i + 1) + '-' + str(len(marker_list[i]) + 1), next_x, next_y, main_marker_list[i])
                     print('=' * 10, 'marker', str(i + 1), ' change', '=' * 10)
-                    print(str(i + 1) + 'group marker changed by vfh(). (', main_marker_list[i].x, ', ', main_marker_list[i].y, ') : ', len(marker_list[i]))
+                    print(str(i + 1) + 'group marker changed by vfh_dfs(). (', main_marker_list[i].x, ', ', main_marker_list[i].y, ') : ', len(marker_list[i]))
                     print('=' * 30)
-                marker_change_key[i] = 0
-                marker_algorithm_key[i] = 0
                 area_step[i] = 0
                 
                 # グリッドマップの更新
