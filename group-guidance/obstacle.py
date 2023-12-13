@@ -29,6 +29,9 @@ def obstacle_map_ex1():
     obstacle8 = Obstacle_square(-5, -25, 25, 40)
     obstacle9 = Obstacle_square(50, 10, 5, 20)
     obstacle10 = Obstacle_square(70, 10, 15, 5)
+    obstacle11 = Obstacle_square(-25, -10, 5, 5)
+    obstacle12 = Obstacle_square(70, -10, 10, 10)
+    obstacle13 = Obstacle_square(-35, 10, 10, 10)
     
     obstacle_list.append(obstacle1)
     obstacle_list.append(obstacle2)
@@ -40,6 +43,9 @@ def obstacle_map_ex1():
     obstacle_list.append(obstacle8)
     obstacle_list.append(obstacle9)
     obstacle_list.append(obstacle10)
+    obstacle_list.append(obstacle11)
+    obstacle_list.append(obstacle12)
+    obstacle_list.append(obstacle13)
     
     for i in range(len(obstacle_list)):
         df = pd.DataFrame()
