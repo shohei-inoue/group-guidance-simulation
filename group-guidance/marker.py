@@ -18,12 +18,12 @@ class Real_marker:
         self.outer_boundary = params.OUTER_BOUNDARY
         self.collision_df = pd.DataFrame(columns=['x', 'y', 'azimuth', 'distance'])
         self.already_direction_index = []
-        self.attribute = 0
+        self.label = 0
         self.parent = None
     
     
     def get_arguments(self):
-        return pd.DataFrame({'marker_id': [self.marker_id], 'x': [self.x], 'y': [self.y], 'point': [self.point], 'coverage_ratio': [self.coverage_ratio], 'mean': [self.mean], 'variance': [self.variance], 'inner_boundary': [self.inner_boundary], 'outer_boundary': [self.outer_boundary], 'parent': [self.parent]})
+        return pd.DataFrame({'marker_id': [self.marker_id], 'x': [self.x], 'y': [self.y], 'point': [self.point], 'coverage_ratio': [self.coverage_ratio], 'mean': [self.mean], 'variance': [self.variance], 'inner_boundary': [self.inner_boundary], 'outer_boundary': [self.outer_boundary], 'label': [self.label], 'parent': [self.parent]})
     
     
     # 親方向から見て最も探査向上性が高くなる角度を求める
@@ -260,7 +260,7 @@ class Real_marker:
     
     # VFHから確率分布を作成し移動先を決定する(走行可能性による確率密度分布)
     def vfh_using_probability_only_obstacle_density(self, bins=params.VFH_BINS):
-        histogram = [1 for i in range(bins)]
+        histogram = [1 for _ in range(bins)]
         split_arg = np.rad2deg(2.0 * math.pi) / bins
         
         for i in range(self.collision_df.shape[0]):
@@ -370,6 +370,7 @@ class Real_marker:
         
         return split_arg * (best_index + 0.5)
 
+
     # 深さ優先探索を用い, 走行可能性により方向を決定する
     def vfh_dfs(self, init_x, init_y, bins=params.VFH_BINS):
         histogram = []
@@ -395,6 +396,37 @@ class Real_marker:
             
         for i in range(bins):
             print("histogram[", str(i), "] : ", histogram[i][-1])
+        
+        # ラベル付け
+        label_list = []
+        label_key = 0
+        for i in range(bins):
+            if label_key == 0:
+                if histogram[i][-1] <= params.DFS_THRESHOLD:
+                    label_list.append([histogram[i][0]])
+                    label_key = 1
+            else: # label_key == 1
+                if histogram[i][-1] <= params.DFS_THRESHOLD:
+                    label_list[-1].append(histogram[i][0])
+                else:
+                    label_key = 0
+        
+        if label_list != []:
+            if 0 in label_list[0] and bins - 1 in label_list[-1]:
+                label_list[0] += label_list[-1]
+                del label_list[-1]
+        
+        if len(label_list) >= 2:
+            self.label = 2
+            for i in range(len(label_list)):
+                if len(label_list[i]) >= 6:
+                    self.label = 3
+                    break
+        else:
+            self.label = 1
+            for i in range(len(label_list)):
+                if len(label_list[i]) >= 6:
+                    self.label = 3
         
         for i in range(len(self.already_direction_index)):
             histogram[int(self.already_direction_index[i])][-1] = float('inf')

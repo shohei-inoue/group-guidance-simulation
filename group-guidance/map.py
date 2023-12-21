@@ -87,8 +87,8 @@ def area_coverage_calculation(map, marker):
 
 
 # 全体網羅率計算
-def map_coverage_calculation(map):
-    all_count = map.size
+def map_coverage_calculation(map, map_obstacle_size):
+    all_count = map.size - map_obstacle_size
     explored_count = np.count_nonzero(map >= 1)
     
     return explored_count / all_count * 100.0
