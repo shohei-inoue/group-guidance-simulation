@@ -35,6 +35,8 @@ def obstacle_map_ex1():
     obstacle11 = Obstacle_square(-25, -20, 5, 5)
     obstacle12 = Obstacle_square(70, -10, 10, 10)
     obstacle13 = Obstacle_square(-35, 10, 10, 10)
+    obstacle14 = Obstacle_square(-25, 0, 5, 5)
+    obstacle15 = Obstacle_square(25, 5, 5, 5)
     
     obstacle_list.append(obstacle1)
     obstacle_list.append(obstacle2)
@@ -49,6 +51,97 @@ def obstacle_map_ex1():
     obstacle_list.append(obstacle11)
     obstacle_list.append(obstacle12)
     obstacle_list.append(obstacle13)
+    obstacle_list.append(obstacle14)
+    obstacle_list.append(obstacle15)
+    
+    
+    map_obstacle_size = 0
+    for i in range(len(obstacle_list)):
+        map_obstacle_size += obstacle_list[i].obstacle_size()
+    
+    for i in range(len(obstacle_list)):
+        df = pd.DataFrame()
+        df = pd.DataFrame(obstacle_list[i].get_arguments())
+        obstacle_df_list.append(df)
+    
+    return obstacle_list, obstacle_df_list, map_obstacle_size
+
+
+def obstacle_map_ex1_1():
+    obstacle_list = []
+    obstacle_df_list = []
+    obstacle1 = Obstacle_square(-100, 25, 5, 200)
+    obstacle2 = Obstacle_square(-100, -30, 5, 200)
+    obstacle3 = Obstacle_square(-100, -25, 50, 5)
+    obstacle4 = Obstacle_square(95, -25, 50, 5)
+    obstacle5 = Obstacle_square(-70, 0, 25, 20)
+    obstacle6 = Obstacle_square(-30, -25, 25, 20)
+    obstacle7 = Obstacle_square(10, 0, 25, 20)
+    obstacle8 = Obstacle_square(50, -25, 25, 20)
+    
+    obstacle_list.append(obstacle1)
+    obstacle_list.append(obstacle2)
+    obstacle_list.append(obstacle3)
+    obstacle_list.append(obstacle4)
+    obstacle_list.append(obstacle5)
+    obstacle_list.append(obstacle6)
+    obstacle_list.append(obstacle7)
+    obstacle_list.append(obstacle8)
+    #obstacle_list.append(obstacle9)
+    #obstacle_list.append(obstacle10)
+    #obstacle_list.append(obstacle11)
+    #obstacle_list.append(obstacle12)
+    #obstacle_list.append(obstacle13)
+    
+    map_obstacle_size = 0
+    for i in range(len(obstacle_list)):
+        map_obstacle_size += obstacle_list[i].obstacle_size()
+    
+    for i in range(len(obstacle_list)):
+        df = pd.DataFrame()
+        df = pd.DataFrame(obstacle_list[i].get_arguments())
+        obstacle_df_list.append(df)
+    
+    return obstacle_list, obstacle_df_list, map_obstacle_size
+
+
+def obstacle_map_ex1_2():
+    obstacle_list = []
+    obstacle_df_list = []
+    obstacle1 = Obstacle_square(-100, 25, 5, 200)
+    obstacle2 = Obstacle_square(-100, -30, 5, 200)
+    obstacle3 = Obstacle_square(-100, -25, 50, 5)
+    obstacle4 = Obstacle_square(95, -25, 50, 5)
+    
+    obstacle_list.append(obstacle1)
+    obstacle_list.append(obstacle2)
+    obstacle_list.append(obstacle3)
+    obstacle_list.append(obstacle4)
+    
+    map_obstacle_size = 0
+    for i in range(len(obstacle_list)):
+        map_obstacle_size += obstacle_list[i].obstacle_size()
+    
+    for i in range(len(obstacle_list)):
+        df = pd.DataFrame()
+        df = pd.DataFrame(obstacle_list[i].get_arguments())
+        obstacle_df_list.append(df)
+    
+    return obstacle_list, obstacle_df_list, map_obstacle_size
+
+
+def obstacle_map_ex1_3():
+    obstacle_list = []
+    obstacle_df_list = []
+    obstacle1 = Obstacle_square(-95, 6, 24, 190)
+    obstacle2 = Obstacle_square(-95, -30, 24, 190)
+    obstacle3 = Obstacle_square(-100, -30, 60, 5)
+    obstacle4 = Obstacle_square(95, -30, 60, 5)
+    
+    obstacle_list.append(obstacle1)
+    obstacle_list.append(obstacle2)
+    obstacle_list.append(obstacle3)
+    obstacle_list.append(obstacle4)
     
     map_obstacle_size = 0
     for i in range(len(obstacle_list)):
@@ -92,6 +185,65 @@ def obstacle_map_ex2():
     obstacle_list.append(obstacle11)
     obstacle_list.append(obstacle12)
     obstacle_list.append(obstacle13)
+    
+    map_obstacle_size = 0
+    for i in range(len(obstacle_list)):
+        map_obstacle_size += obstacle_list[i].obstacle_size()
+    
+    for i in range(len(obstacle_list)):
+        df = pd.DataFrame()
+        df = pd.DataFrame(obstacle_list[i].get_arguments())
+        obstacle_df_list.append(df)
+    
+    return obstacle_list, obstacle_df_list, map_obstacle_size
+
+
+def obstacle_map_exs():
+    obstacle_list = []
+    obstacle_df_list = []
+    obstacle1 = Obstacle_square(-40, 35, 5, 80)
+    obstacle2 = Obstacle_square(-40, -40, 5, 80)
+    obstacle3 = Obstacle_square(-40, -35, 70, 5)
+    obstacle4 = Obstacle_square(35, -35, 70, 5)
+    
+    obstacle_list.append(obstacle1)
+    obstacle_list.append(obstacle2)
+    obstacle_list.append(obstacle3)
+    obstacle_list.append(obstacle4)
+    
+    map_obstacle_size = 0
+    for i in range(len(obstacle_list)):
+        map_obstacle_size += obstacle_list[i].obstacle_size()
+    
+    for i in range(len(obstacle_list)):
+        df = pd.DataFrame()
+        df = pd.DataFrame(obstacle_list[i].get_arguments())
+        obstacle_df_list.append(df)
+    
+    return obstacle_list, obstacle_df_list, map_obstacle_size
+
+def obstacle_map_exs2():
+    obstacle_list = []
+    obstacle_df_list = []
+    obstacle1 = Obstacle_square(-40, 35, 5, 80)
+    obstacle2 = Obstacle_square(-40, -40, 5, 80)
+    obstacle3 = Obstacle_square(-40, -35, 70, 5)
+    obstacle4 = Obstacle_square(35, -35, 70, 5)
+    
+    
+    obstacle_list.append(obstacle1)
+    obstacle_list.append(obstacle2)
+    obstacle_list.append(obstacle3)
+    obstacle_list.append(obstacle4)
+    obstacle_list.append(obstacle5)
+    obstacle_list.append(obstacle6)
+    obstacle_list.append(obstacle7)
+    obstacle_list.append(obstacle8)
+    obstacle_list.append(obstacle9)
+    obstacle_list.append(obstacle10)
+    obstacle_list.append(obstacle11)
+    obstacle_list.append(obstacle12)
+    
     
     map_obstacle_size = 0
     for i in range(len(obstacle_list)):

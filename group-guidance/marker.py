@@ -412,9 +412,10 @@ class Real_marker:
                     label_key = 0
         
         if label_list != []:
-            if 0 in label_list[0] and bins - 1 in label_list[-1]:
-                label_list[0] += label_list[-1]
-                del label_list[-1]
+            if len(label_list[0]) != bins:
+                if 0 in label_list[0] and bins - 1 in label_list[-1]:
+                    label_list[0] += label_list[-1]
+                    del label_list[-1]
         
         if len(label_list) >= 2:
             self.label = 2
@@ -424,6 +425,7 @@ class Real_marker:
                     break
         else:
             self.label = 1
+            print("s_t = ",  str(len(label_list)))
             for i in range(len(label_list)):
                 if len(label_list[i]) >= 6:
                     self.label = 3

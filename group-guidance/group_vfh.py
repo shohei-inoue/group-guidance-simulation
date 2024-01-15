@@ -10,7 +10,7 @@ import obstacle
 
 def main():
     # 障害物マップの取得
-    obstacle_list, obstacle_df_list = obstacle.obstacle_map_ex1()
+    obstacle_list, obstacle_df_list, obstacle_size = obstacle.obstacle_map_exs()
     
     # マーカー用リストの作成
     marker_change_th = marker.marker_change_threshold()
@@ -26,11 +26,15 @@ def main():
     red_df_list = []
     
     # 群数の指定と群の作成
-    group_num = int(input('How many groups do you make? : '))
+    #group_num = int(input('How many groups do you make? : '))
+    group_num = 1
     for i in range(group_num):
-        red_num = int(input('Please enter the number of Reds in the ' + str(i + 1) + ' group. : '))
-        marker_x = int(input('Please enter the x-coordinate of the ' + str(i + 1) + ' group marker : '))
-        marker_y = int(input('Please enter the y-coordinate of the ' + str(i + 1) + ' group marker : '))
+        #red_num = int(input('Please enter the number of Reds in the ' + str(i + 1) + ' group. : '))
+        red_num = 10
+        #marker_x = int(input('Please enter the x-coordinate of the ' + str(i + 1) + ' group marker : '))
+        #marker_y = int(input('Please enter the y-coordinate of the ' + str(i + 1) + ' group marker : '))
+        marker_x = 0
+        marker_y = 0
         main_marker = marker.Real_marker('marker' + str(i + 1) + '-1', marker_x, marker_y)
         red_list.append([])
         red_df_list.append([])
@@ -68,13 +72,14 @@ def main():
     # 誘導開始
     while True:
         # 全体網羅率の計算
-        map_coverage_ratio = map.map_coverage_calculation(grid_map[-1])
+        map_coverage_ratio = map.map_coverage_calculation(grid_map[-1], obstacle_size)
         print('#' * 30)
         print(red_list[-1][-1].step, 'step : map_coverage_ratio :', map_coverage_ratio)
         print('#' * 30)
         
         # 誘導終了判定
-        if map_coverage_ratio >= params.ALL_AREA_COVERAGE_THRESHOLD or red_list[-1][-1].step == 5000: # 仮置き
+        #if map_coverage_ratio >= params.ALL_AREA_COVERAGE_THRESHOLD or red_list[-1][-1].step == 10000: # 仮置き
+        if red_list[-1][-1].step == 5000:
             print('Exploration completed.')
             break
         
@@ -95,14 +100,22 @@ def main():
             
             # 網羅率が閾値を超えた場合の探査中心の変換
             if main_marker_list[i].coverage_ratio >= params.AREA_COVERAGE_THRESHOLD:
-                next_theta = math.radians(main_marker_list[i].vfh_using_probability())
-                next_x = params.OUTER_BOUNDARY * math.cos(next_theta) + main_marker_list[i].x
-                next_y = params.OUTER_BOUNDARY * math.sin(next_theta) + main_marker_list[i].y
-                marker_list[i].append(main_marker_list[i])
-                main_marker_list[i] = marker.Virtual_marker('marker' + str(i + 1) + '-' + str(len(marker_list[i]) + 1), next_x, next_y, main_marker_list[i])
-                print('=' * 10, 'marker', str(i + 1), ' change', '=' * 10)
-                print(str(i + 1) + 'group marker changed by vfh_using_probability(). (', main_marker_list[i].x, ', ', main_marker_list[i].y, ') : ', len(marker_list[i]))
-                print('=' * 30)
+                if len(main_marker_list[i].already_direction_index) == params.VFH_BINS:
+                    marker_list[i].append(main_marker_list[i])
+                    main_marker_list[i] = main_marker_list[i].parent
+                    print('=' * 10, 'marker ', str(i + 1), ' change', '='* 10)
+                    print(str(i + 1) + 'already_direction_index is max. group marker back changed. (', main_marker_list[i].x, ', ', main_marker_list[i].y, ') : ', len(marker_list[i]))
+                    print('=' * 30)
+                else:
+                    next_theta = math.radians(main_marker_list[i].vfh_using_probability())
+                    #next_theta = math.radians(main_marker_list[i].vfh_using_probability_only_obstacle_density())
+                    next_x = params.OUTER_BOUNDARY * math.cos(next_theta) + main_marker_list[i].x
+                    next_y = params.OUTER_BOUNDARY * math.sin(next_theta) + main_marker_list[i].y
+                    marker_list[i].append(main_marker_list[i])
+                    main_marker_list[i] = marker.Virtual_marker('marker' + str(i + 1) + '-' + str(len(marker_list[i]) + 1), next_x, next_y, main_marker_list[i])
+                    print('=' * 10, 'marker', str(i + 1), ' change', '=' * 10)
+                    print(str(i + 1) + 'group marker changed by vfh_using_probability(). (', main_marker_list[i].x, ', ', main_marker_list[i].y, ') : ', len(marker_list[i]))
+                    print('=' * 30)
                 marker_algorithm_key[i] = 1
                 marker_change_key[i] = 0
                 
@@ -113,24 +126,24 @@ def main():
                 plt.pause(0.05)
             
             # 網羅率が閾値を超えなかった場合とストレスカウントが閾値を超えた場合の探査中心の変換
-            elif marker_change_key[i] >= 4 or area_step[i] == params.AREA_STEP_THRESHOLD:
+            elif marker_change_key[i] >= 4:# or area_step[i] == params.AREA_STEP_THRESHOLD:
                 # 前回の探査中心の変換が確率密度を用いたものだった場合
-                if marker_algorithm_key[i] == 1:
-                    marker_list[i].append(main_marker_list[i])
-                    main_marker_list[i] = main_marker_list[i].parent
-                    print('=' * 10, 'marker', str(i + 1), ' change', '=' * 10)
-                    print(str(i + 1) + 'group marker back changed. (', main_marker_list[i].x, ', ', main_marker_list[i].y, ') : ', len(marker_list[i]))
-                    print('=' * 30)
+                #if marker_algorithm_key[i] == 1:
+                marker_list[i].append(main_marker_list[i])
+                main_marker_list[i] = main_marker_list[i].parent
+                print('=' * 10, 'marker', str(i + 1), ' change', '=' * 10)
+                print(str(i + 1) + 'group marker back changed. (', main_marker_list[i].x, ', ',main_marker_list[i].y, ') : ', len(marker_list[i]))
+                print('=' * 30)
                 
                 # 前回の探査中心の変換が確率密度を用いなかった場合
-                elif marker_algorithm_key[i] == 0:
-                    next_theta = math.radians(main_marker_list[i].vfh_only_obstacle_density())
-                    next_x = params.OUTER_BOUNDARY * math.cos(next_theta) + main_marker_list[i].x
-                    next_y = params.OUTER_BOUNDARY * math.sin(next_theta) + main_marker_list[i].y
-                    main_marker_list[i] = marker.Virtual_marker('marker' + str(i + 1) + '-' + str(len(marker_list[i]) + 1), next_x, next_y, main_marker_list[i])
-                    print('=' * 10, 'marker', str(i + 1), ' change', '=' * 10)
-                    print(str(i + 1) + 'group marker changed by vfh(). (', main_marker_list[i].x, ', ', main_marker_list[i].y, ') : ', len(marker_list[i]))
-                    print('=' * 30)
+                #elif marker_algorithm_key[i] == 0:
+                #    next_theta = math.radians(main_marker_list[i].vfh_only_obstacle_density())
+                #    next_x = params.OUTER_BOUNDARY * math.cos(next_theta) + main_marker_list[i].x
+                #    next_y = params.OUTER_BOUNDARY * math.sin(next_theta) + main_marker_list[i].y
+                #    main_marker_list[i] = marker.Virtual_marker('marker' + str(i + 1) + '-' + str(len(marker_list[i]) + 1), next_x, next_y, main_marker_list[i])
+                #    print('=' * 10, 'marker', str(i + 1), ' change', '=' * 10)
+                #    print(str(i + 1) + 'group marker changed by vfh(). (', main_marker_list[i].x, ', ', main_marker_list[i].y, ') : ', len(marker_list[i]))
+                #    print('=' * 30)
                 marker_change_key[i] = 0
                 marker_algorithm_key[i] = 0
                 area_step[i] = 0
@@ -164,7 +177,7 @@ def main():
     # Red
     for i in range(len(red_df_list)):
         for j in range(len(red_df_list[i])):
-            red_df_list[i][j].to_csv(params.SAVE_DIRECTORY + red_list[i][j].red_id + '.csv')
+            red_df_list[i][j].to_csv(params.SAVE_DIRECTORY + 'ex_' + red_list[i][j].red_id + '.csv')
 
     # Marker
     for i in range(len(marker_list)):
@@ -173,7 +186,7 @@ def main():
                 marker_df = pd.DataFrame(marker_list[i][j].get_arguments())
             else:
                 marker_df = pd.concat([marker_df, marker_list[i][j].get_arguments()])
-            marker_df.to_csv(params.SAVE_DIRECTORY + 'marker' + str(i + 1) + '.csv')
+            marker_df.to_csv(params.SAVE_DIRECTORY + 'ex_marker' + str(i + 1) + '.csv')
     
     # obstacle
     for i in range(len(obstacle_df_list)):
