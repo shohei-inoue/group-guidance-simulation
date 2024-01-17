@@ -1,3 +1,7 @@
+import params
+import marker
+import pandas as pd
+
 def route_determinate(group_num, marker_list):
     
     # 探査用ルートの作成
@@ -45,6 +49,58 @@ def route_determinate(group_num, marker_list):
         exploration_route_list[i].reverse()
     
     return exploration_route_list, red_num_result
+
+
+def route_determinate2(group_num, marker_list):
+    # 探査用ルートの作成
+    group_slice = 3
+    route_key = 0
+    wide_area_list = []
+    for i in range(group_num):
+        for j in range(len(marker_list[i])):
+            if route_key == 0:
+                if marker_list[i][j].label == 3:
+                    wide_area_list.append([marker_list[i][j]])
+                    route_key = 1
+            else:
+                if marker_list[i][j].label != 3:
+                    route_key = 0
+                else:
+                    wide_area_list[-1].append(marker_list[i][j])
+    
+    wide_area_list.sort(key=len, reverse=True)
+    wide_area_list = wide_area_list[:group_slice]
+    
+    wide_area_exploration_list = []
+    for i in range(len(wide_area_list)):
+        explore_point = wide_area_list[i][len(wide_area_list[i]) // 2]
+        wide_area_exploration_list.append(explore_point)
+
+    exploration_route_list = []
+    for i in range(len(wide_area_exploration_list)):
+        exploration_route_point = wide_area_exploration_list[i]
+        exploration_route_list.append([])
+        while True:
+            exploration_route_list[i].append(exploration_route_point)
+            if exploration_route_point.parent != None:
+                exploration_route_point = exploration_route_point.parent
+            else:
+                break
+    
+    exploration_route_list.reverse()
+    for i in range(len(exploration_route_list)):
+        exploration_route_list[i].reverse()
+    
+    # csv作成
+    for i in range(len(exploration_route_list)):
+        for j in range(len(exploration_route_list[i])):
+            if j == 0:
+                route_df = pd.DataFrame(exploration_route_list[i][j].get_arguments())
+            else:
+                route_df = pd.concat([route_df, exploration_route_list[i][j].get_arguments()])
+        route_df.to_csv(params.SAVE_DIRECTORY + 'route' + str(i + 1) + '.csv')
+    
+    return exploration_route_list
 
 
 def normalize_list(lst, target_sum = 30, lower_bound = 5):
